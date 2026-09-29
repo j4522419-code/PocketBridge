@@ -1,0 +1,46 @@
+name: Build Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish self-contained Windows app
+        shell: pwsh
+        run: >-
+          dotnet publish .\PocketBridge.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=None -p:DebugSymbols=false
+          -o .\publish
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release view "$env:GITHUB_REF_NAME" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "$env:GITHUB_REF_NAME" `
+              --title "PocketBridge $env:GITHUB_REF_NAME" `
+              --notes "Download PocketBridge.exe and run it on Windows 10 or 11. See the repository README for setup and usage." `
+              --latest
+          }
+          gh release upload "$env:GITHUB_REF_NAME" ".\publish\PocketBridge.exe" --clobber
